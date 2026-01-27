@@ -4,9 +4,9 @@
   "codeowners": [],
   "config_flow": true,
   "codeowners": ["@matfiej88"],
-  "documentation": "https://github.com/matfiej88/ha-enaa-scrapper",
+  "documentation": "https://github.com/matfiej88/ha-enea-scraper",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/matfiej88/ha-enaa-scrapper/issues",
+  "issue_tracker": "https://github.com/matfiej88/ha-enea-scraper/issues",
   "requirements": ["aiohttp", "beautifulsoup4"],
   "version": "1.5.5"
 }
