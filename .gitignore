@@ -1,0 +1,32 @@
+# Ignore config files with credentials
+config.env
+*.env
+!*.env.example
+
+# Ignore Home Assistant database and logs
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.log.*
+
+# Ignore python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore output files
+output.csv
+output_error.html
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore virtual environment
+.venv/
+venv/
+
+hass_config/

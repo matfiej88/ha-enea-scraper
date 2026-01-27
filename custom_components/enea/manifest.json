@@ -1,0 +1,12 @@
+{
+  "domain": "enea",
+  "name": "Enea Scraper",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "",
+  "requirements": ["aiohttp", "beautifulsoup4"],
+  "version": "1.5.5"
+}
+
