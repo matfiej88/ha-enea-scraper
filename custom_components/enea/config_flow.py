@@ -14,12 +14,30 @@ class EneaConfigFlow(config_entries.ConfigFlow, domain="enea"):
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            return self.async_create_entry(title="Enea Energy Meter", data=user_input)
+            # Validate credentials and fetch point_of_delivery_id
+            try:
+                from .api import EneaApiClient
+                client = EneaApiClient(
+                    user_input[CONF_USERNAME],
+                    user_input[CONF_PASSWORD]
+                )
+
+                # This will login and fetch the ID
+                await client.async_login()
+                pod_id = await client.async_fetch_point_of_delivery_id()
+                await client.close()
+
+                # Add the fetched ID to user_input
+                user_input[CONF_ID] = pod_id
+
+                return self.async_create_entry(title="Enea Energy Meter", data=user_input)
+            except Exception as e:
+                _LOGGER.error(f"Failed to validate credentials or fetch ID: {e}")
+                errors["base"] = "auth"
 
         data_schema = vol.Schema({
             vol.Required(CONF_USERNAME): str,
             vol.Required(CONF_PASSWORD): str,
-            vol.Required(CONF_ID): str,
             vol.Optional(CONF_SCAN_INTERVAL, default=1): int,
         })
 

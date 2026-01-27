@@ -10,6 +10,7 @@ import datetime
 from .const import TIMEZONE
 
 LOGIN_URL = "https://ebok.enea.pl/logowanie"
+METER_CHART_URL = "https://ebok.enea.pl/meter/summaryBalancingChart"
 CSV_URL = "https://ebok.enea.pl/meter/summaryBalancingChart/csv"
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 class EneaApiClient:
     """Enea API client."""
 
-    def __init__(self, username, password, point_of_delivery_id):
+    def __init__(self, username, password, point_of_delivery_id=None):
         """Initialize the client."""
         self._username = username
         self._password = password
@@ -36,6 +37,10 @@ class EneaApiClient:
         """
         if not self._is_logged_in:
             await self.async_login()
+
+        # Auto-fetch point_of_delivery_id if not set
+        if not self._point_of_delivery_id:
+            await self.async_fetch_point_of_delivery_id()
 
         csv_payload = {
             "duration": "day",
@@ -154,6 +159,35 @@ class EneaApiClient:
                 _LOGGER.error("Login failed: PHPSESSID cookie not found.")
                 raise Exception("No PHPSESSID cookie after logging in!")
             self._is_logged_in = True
+
+    async def async_fetch_point_of_delivery_id(self):
+        """Fetch point_of_delivery_id from the meter chart page.
+
+        Returns:
+            str: The point of delivery ID
+        """
+        if not self._is_logged_in:
+            await self.async_login()
+
+        async with self._session.get(METER_CHART_URL) as resp:
+            text = await resp.text()
+            resp.raise_for_status()
+            soup = BeautifulSoup(text, 'html.parser')
+
+            # Find checkbox with data-point-of-delivery-id attribute
+            checkbox = soup.find('input', {'data-point-of-delivery-id': True})
+
+            if not checkbox:
+                _LOGGER.error("Could not find point-of-delivery-id in meter chart page")
+                raise Exception('Point of delivery ID not found!')
+
+            pod_id = checkbox.get('data-point-of-delivery-id')
+            if not pod_id:
+                raise Exception('Point of delivery ID is empty!')
+
+            _LOGGER.info(f"Found point of delivery ID: {pod_id}")
+            self._point_of_delivery_id = pod_id
+            return pod_id
 
     async def async_get_login_token(self):
         """Gets the current token from the login form."""

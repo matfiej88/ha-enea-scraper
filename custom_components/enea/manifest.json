@@ -8,6 +8,6 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/matfiej88/ha-enea-scraper/issues",
   "requirements": ["aiohttp", "beautifulsoup4"],
-  "version": "1.5.7"
+  "version": "1.6.0"
 }
 

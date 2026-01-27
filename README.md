@@ -24,7 +24,6 @@ Data is automatically synchronized and displayed in the Home Assistant Energy Da
 
 - Home Assistant 2023.1 or newer
 - Active Enea e-BOK account (https://ebok.enea.pl)
-- Access to Point of Delivery ID (PPE)
 
 ## 🚀 Installation
 
@@ -71,15 +70,18 @@ Data is automatically synchronized and displayed in the Home Assistant Energy Da
 4. Fill out the configuration form:
    - **Username**: Your Enea e-BOK login
    - **Password**: Your Enea e-BOK password
-   - **Point of Delivery ID**: PPE number (Point of Delivery)
    - **Scan Interval**: Data fetch interval in days (default: 1)
 
-### How to Find Your Point of Delivery ID (PPE)?
+**Note**: The Point of Delivery ID (PPE) is now automatically fetched from your Enea account during setup - no manual input required!
 
-1. Log in to https://ebok.enea.pl
-2. Go to the energy consumption data section
-3. The Point of Delivery ID is located in the meter data or in the URL of the data page
-4. It's typically an 18-digit number, e.g., `PL0012345678901234`
+### Credential Validation
+
+During setup, the integration will:
+1. Validate your credentials by logging into Enea e-BOK
+2. Automatically fetch your Point of Delivery ID
+3. Create the integration if successful
+
+If you have multiple meters, the integration will use the first one found.
 
 ## 🎯 Usage
 
