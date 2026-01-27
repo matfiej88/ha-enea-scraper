@@ -3,9 +3,10 @@
   "name": "Enea Scraper",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "",
+  "codeowners": ["@matfiej88"],
+  "documentation": "https://github.com/matfiej88/ha-enaa-scrapper",
   "iot_class": "cloud_polling",
-  "issue_tracker": "",
+  "issue_tracker": "https://github.com/matfiej88/ha-enaa-scrapper/issues",
   "requirements": ["aiohttp", "beautifulsoup4"],
   "version": "1.5.5"
 }
