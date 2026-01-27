@@ -13,17 +13,21 @@ LOGIN_URL = "https://ebok.enea.pl/logowanie"
 METER_CHART_URL = "https://ebok.enea.pl/meter/summaryBalancingChart"
 CSV_URL = "https://ebok.enea.pl/meter/summaryBalancingChart/csv"
 
+# Default timeout for all HTTP requests (in seconds)
+DEFAULT_TIMEOUT = 30
+
 _LOGGER = logging.getLogger(__name__)
 
 class EneaApiClient:
     """Enea API client."""
 
-    def __init__(self, username, password, point_of_delivery_id=None):
+    def __init__(self, username, password, point_of_delivery_id=None, timeout=DEFAULT_TIMEOUT):
         """Initialize the client."""
         self._username = username
         self._password = password
         self._point_of_delivery_id = point_of_delivery_id
-        self._session = aiohttp.ClientSession()
+        self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._session = aiohttp.ClientSession(timeout=self._timeout)
         self._is_logged_in = False
 
     async def async_download_csv(self, run_date):
@@ -35,6 +39,8 @@ class EneaApiClient:
         Returns:
             List of dicts with keys: start, consumed, returned (hourly data)
         """
+        import asyncio
+
         if not self._is_logged_in:
             await self.async_login()
 
@@ -51,11 +57,18 @@ class EneaApiClient:
 
         try:
             csv_data = await self._fetch_csv_data(csv_payload, headers)
+        except asyncio.TimeoutError:
+            _LOGGER.error(f"Timeout fetching CSV data for {run_date}")
+            raise
         except aiohttp.ClientResponseError as e:
             if e.status == 401:
                 self._is_logged_in = False
                 await self.async_login()
-                csv_data = await self._fetch_csv_data(csv_payload, headers)
+                try:
+                    csv_data = await self._fetch_csv_data(csv_payload, headers)
+                except asyncio.TimeoutError:
+                    _LOGGER.error(f"Timeout fetching CSV data for {run_date} (retry after re-login)")
+                    raise
             else:
                 raise
 

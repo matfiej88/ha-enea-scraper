@@ -25,11 +25,22 @@ class EneaDataFetcher:
         Returns:
             List of parsed hourly data for that date
         """
+        import asyncio
+        import aiohttp
+
         try:
+            _LOGGER.debug(f"Fetching data for {date_str}...")
             hourly_data = await self.client.async_download_csv(date_str)
+            _LOGGER.debug(f"Successfully fetched data for {date_str}")
             return hourly_data if hourly_data else []
+        except asyncio.TimeoutError:
+            _LOGGER.error(f"Timeout error fetching data for {date_str} - request took too long")
+            return []
+        except aiohttp.ClientError as e:
+            _LOGGER.error(f"Network error fetching data for {date_str}: {e}")
+            return []
         except Exception as e:
-            _LOGGER.error(f"Error fetching data for {date_str}: {e}")
+            _LOGGER.error(f"Error fetching data for {date_str}: {e}", exc_info=True)
             return []
 
     async def fetch_for_date_range(self, start_date: datetime.date, end_date: datetime.date) -> dict:
