@@ -123,8 +123,10 @@ class EneaBaseSensor(CoordinatorEntity, SensorEntity):
                 unit_class="energy",
                 mean_type=StatisticMeanType.NONE,
             )
-            await async_import_statistics(self.hass, metadata, statistics)
 
+            await get_instance(self.hass).async_add_executor_job(
+                async_import_statistics, self.hass, metadata, statistics
+            )
 
     def _get_last_statistic_before(self, statistic_id, before_date):
         """Get the last statistics record before the given date."""
