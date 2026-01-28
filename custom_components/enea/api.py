@@ -27,8 +27,23 @@ class EneaApiClient:
         self._password = password
         self._point_of_delivery_id = point_of_delivery_id
         self._timeout = aiohttp.ClientTimeout(total=timeout)
-        self._session = aiohttp.ClientSession(timeout=self._timeout)
+        self._session = None
         self._is_logged_in = False
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        self._session = aiohttp.ClientSession(timeout=self._timeout)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
+        return False
+
+    def _ensure_session(self):
+        """Ensure session is created."""
+        if self._session is None:
+            self._session = aiohttp.ClientSession(timeout=self._timeout)
 
     async def async_download_csv(self, run_date):
         """Downloads and parses CSV data for a specific date.
@@ -40,6 +55,8 @@ class EneaApiClient:
             List of dicts with keys: start, consumed, returned (hourly data)
         """
         import asyncio
+
+        self._ensure_session()
 
         if not self._is_logged_in:
             await self.async_login()
@@ -155,6 +172,8 @@ class EneaApiClient:
 
     async def async_login(self):
         """Logs into ebok.enea.pl."""
+        self._ensure_session()
+
         token = await self.async_get_login_token()
         if not token:
             raise Exception('No login token!')
@@ -179,6 +198,8 @@ class EneaApiClient:
         Returns:
             str: The point of delivery ID
         """
+        self._ensure_session()
+
         if not self._is_logged_in:
             await self.async_login()
 
@@ -204,6 +225,8 @@ class EneaApiClient:
 
     async def async_get_login_token(self):
         """Gets the current token from the login form."""
+        self._ensure_session()
+
         async with self._session.get(LOGIN_URL) as resp:
             text = await resp.text()
             resp.raise_for_status()
@@ -236,5 +259,8 @@ class EneaApiClient:
 
     async def close(self):
         """Close the session."""
-        await self._session.close()
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
+            self._is_logged_in = False
 

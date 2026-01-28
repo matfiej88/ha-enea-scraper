@@ -17,18 +17,16 @@ class EneaConfigFlow(config_entries.ConfigFlow, domain="enea"):
             # Validate credentials and fetch point_of_delivery_id
             try:
                 from .api import EneaApiClient
-                client = EneaApiClient(
+                async with EneaApiClient(
                     user_input[CONF_USERNAME],
                     user_input[CONF_PASSWORD]
-                )
+                ) as client:
+                    # This will login and fetch the ID
+                    await client.async_login()
+                    pod_id = await client.async_fetch_point_of_delivery_id()
 
-                # This will login and fetch the ID
-                await client.async_login()
-                pod_id = await client.async_fetch_point_of_delivery_id()
-                await client.close()
-
-                # Add the fetched ID to user_input
-                user_input[CONF_ID] = pod_id
+                    # Add the fetched ID to user_input
+                    user_input[CONF_ID] = pod_id
 
                 return self.async_create_entry(title="Enea Energy Meter", data=user_input)
             except Exception as e:
@@ -170,12 +168,11 @@ class EneaOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
         # Create API client and fetch data
-        client = create_api_client_from_config_entry(self.config_entry)
-        fetcher = EneaDataFetcher(client)
+        async with create_api_client_from_config_entry(self.config_entry) as client:
+            fetcher = EneaDataFetcher(client)
 
-        _LOGGER.info(f"Fetching data from {start_date} to {end_date}")
-        daily_data_dict = await fetcher.fetch_for_date_range(start_date, end_date)
-        await client.close()
+            _LOGGER.info(f"Fetching data from {start_date} to {end_date}")
+            daily_data_dict = await fetcher.fetch_for_date_range(start_date, end_date)
 
         if not daily_data_dict:
             _LOGGER.warning(f"No data fetched for period {start_date} to {end_date}")
