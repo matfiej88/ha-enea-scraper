@@ -3,15 +3,13 @@ import aiohttp
 from bs4 import BeautifulSoup
 import logging
 import json
-import csv
-import io
 import datetime
 
 from .const import TIMEZONE
 
 LOGIN_URL = "https://ebok.enea.pl/logowanie"
 METER_CHART_URL = "https://ebok.enea.pl/meter/summaryBalancingChart"
-CSV_URL = "https://ebok.enea.pl/meter/summaryBalancingChart/csv"
+JSON_URL = "https://ebok.enea.pl/meter/summaryBalancingChart"
 
 # Default timeout for all HTTP requests (in seconds)
 DEFAULT_TIMEOUT = 30
@@ -46,7 +44,7 @@ class EneaApiClient:
             self._session = aiohttp.ClientSession(timeout=self._timeout)
 
     async def async_download_csv(self, run_date):
-        """Downloads and parses CSV data for a specific date.
+        """Downloads and parses JSON data for a specific date.
 
         Args:
             run_date: Date string in format DD.MM.YYYY
@@ -65,93 +63,76 @@ class EneaApiClient:
         if not self._point_of_delivery_id:
             await self.async_fetch_point_of_delivery_id()
 
-        csv_payload = {
+        payload = {
             "duration": "day",
             "date": run_date,
             "pointOfDeliveryId": self._point_of_delivery_id
         }
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        headers = {
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9,pl;q=0.8,de;q=0.7",
+            "Connection": "keep-alive",
+            "Origin": "https://ebok.enea.pl",
+            "Referer": "https://ebok.enea.pl/meter/summaryBalancingChart",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            "X-Requested-With": "XMLHttpRequest",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        }
+
 
         try:
-            csv_data = await self._fetch_csv_data(csv_payload, headers)
+            json_data = await self._fetch_json_data(payload, headers)
         except asyncio.TimeoutError:
-            _LOGGER.error(f"Timeout fetching CSV data for {run_date}")
+            _LOGGER.error(f"Timeout fetching JSON data for {run_date}")
             raise
         except aiohttp.ClientResponseError as e:
             if e.status == 401:
                 self._is_logged_in = False
                 await self.async_login()
                 try:
-                    csv_data = await self._fetch_csv_data(csv_payload, headers)
+                    json_data = await self._fetch_json_data(payload, headers)
                 except asyncio.TimeoutError:
-                    _LOGGER.error(f"Timeout fetching CSV data for {run_date} (retry after re-login)")
+                    _LOGGER.error(f"Timeout fetching JSON data for {run_date} (retry after re-login)")
                     raise
             else:
                 raise
 
-        return self._parse_csv_data(csv_data)
+        return self._parse_json_data(json_data)
 
-    @staticmethod
-    def _to_float(s: str) -> float:
-        """Convert string to float, handling special cases.
-
-        Args:
-            s: String value to convert
-
-        Returns:
-            Float value, or 0.0 if conversion fails or value is empty/dash
-        """
-        try:
-            if s.strip() in ("---", "", "-"):
-                return 0.0
-            return float(s)
-        except ValueError:
-            return 0.0
-
-    def _parse_csv_data(self, csv_data: str) -> list:
-        """Parse CSV data and return list of hourly consumption/return data.
+    def _parse_json_data(self, json_data: list) -> list:
+        """Parse JSON data and return list of hourly consumption/return data.
 
         Args:
-            csv_data: Raw CSV string from Enea API
+            json_data: List of hourly records from Enea API
 
         Returns:
             List of dicts with keys: start, consumed, returned
         """
-        if not csv_data or "Brak danych" in csv_data:
-            return []
-
-        csv_data = csv_data.replace('\0', '')
-        csv_file = io.StringIO(csv_data)
-        csv_reader = csv.reader(csv_file, delimiter=';')
-
-        rows = list(csv_reader)
-
-        if len(rows) <= 1:
+        if not json_data:
             return []
 
         hourly_data = []
 
-        for row in rows[1:]:
+        for record in json_data:
             try:
-                if not row or len(row) < 5:
+                # Parse dateFrom field (e.g., "2023-07-13T00:00:00")
+                date_from_str = record.get("dateFrom")
+                if not date_from_str:
                     continue
 
-                val = row[0].strip()
-                val = val.lstrip('=').strip('"').strip("'")
-                dt_object = datetime.datetime.strptime(val, '%Y-%m-%d %H:%M')
+                dt_object = datetime.datetime.fromisoformat(date_from_str)
                 dt_object = dt_object.replace(tzinfo=TIMEZONE)
                 dt_object = dt_object.replace(minute=0, second=0, microsecond=0)
 
-                consumed_post_str = row[3].replace(',', '.')
-                returned_post_str = row[4].replace(',', '.')
+                # Get consumed and returned values (after balancing)
+                # Handle None values by converting to 0.0
+                consumed_raw = record.get("aecasb")
+                returned_raw = record.get("eaecasb")
 
-                consumed_post = self._to_float(consumed_post_str)
-                returned_post = self._to_float(returned_post_str)
+                consumed = float(consumed_raw) if consumed_raw is not None else 0.0
+                returned = float(returned_raw) if returned_raw is not None else 0.0
 
-                net = consumed_post - returned_post
-                consumed = max(net, 0.0)
-                returned = max(-net, 0.0)
-
+                # Handle small floating point values
                 if abs(consumed) < 1e-9:
                     consumed = 0.0
                 if abs(returned) < 1e-9:
@@ -163,9 +144,7 @@ class EneaApiClient:
                     "returned": returned
                 })
 
-
-            except (ValueError, IndexError) as e:
-                _LOGGER.debug(f"Error parsing row {row}: {e}")
+            except (ValueError, KeyError, TypeError):
                 continue
 
         return hourly_data
@@ -237,22 +216,23 @@ class EneaApiClient:
                 raise Exception('Login token not found!')
             return token_input['value']
 
-    async def _fetch_csv_data(self, csv_payload, headers):
-        """Helper method to fetch raw CSV data from the API.
+    async def _fetch_json_data(self, payload, headers):
+        """Helper method to fetch JSON data from the API.
 
         Returns:
-            Raw CSV string from the API response
+            List of hourly records from the API response
         """
-        async with self._session.post(CSV_URL, data=csv_payload, headers=headers) as resp:
-            text = await resp.text()
+        async with self._session.post(JSON_URL, data=payload, headers=headers) as resp:
             resp.raise_for_status()
+
+            response_text = await resp.text()
+
             try:
-                json_data = json.loads(text)
-                csv_data = json_data.get("data")
-                return csv_data
-            except json.JSONDecodeError as e:
+                json_data = json.loads(response_text)
+                return json_data
+            except (json.JSONDecodeError, ValueError) as e:
                 _LOGGER.error(
-                    f"Failed to parse JSON response for date {csv_payload.get('date')}. "
+                    f"Failed to parse JSON response for date {payload.get('date')}. "
                     f"Error: {e}"
                 )
                 raise
