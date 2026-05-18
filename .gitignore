@@ -31,3 +31,7 @@ venv/
 
 hass_config/
 solplanet
+
+# Data exports
+*.jsonl
+*.tsv
